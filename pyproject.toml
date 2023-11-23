@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "salesreinforcer"
+version = "0.1.0"
+description = ""
+authors = ["Rubén Chuliá Mena"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "3.12"
+pandas = "^2.1.3"
+plotly = "^5.18.0"
+ipykernel = "^6.27.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
