@@ -372,3 +372,47 @@ class EnvironmentTests(unittest.TestCase):
         environment.step(0)
         # Then
         self.assertEqual("state_3", environment.state)    
+
+    def test_get_reward_from_step(self):
+        # Given
+        G = nx.DiGraph()
+        G.add_nodes_from(["state_1", "state_2"])
+        G.add_edges_from([("state_1", "state_2")])
+        nx.set_edge_attributes(
+            G,
+            {
+                ("state_1", "state_2"): {"action": "SomeAction", "weight": 1, "reward": 10},
+            }
+        )
+        environment = Environment(
+            G,
+            "state_1",
+            action_map={0: "SomeAction"}
+        )
+        environment.reset()
+        # When
+        _, reward, *_ = environment.step(0)
+        # Then
+        self.assertEqual(10, reward)
+        
+    def test_get_reward_from_step_and_posterior_automatic_changes(self):
+        # Given
+        G = nx.DiGraph()
+        G.add_nodes_from(["state_1", "state_2", "state_3", "state_4"])
+        G.add_edges_from([
+            ("state_1", "state_2", {"action": "SomeAction", "weight": 1, "reward": 10}),
+            ("state_2", "state_3", {"action": "Automatic", "weight": 1, "reward": 20}),
+            ("state_3", "state_4", {"action": "Automatic", "weight": 1, "reward": 15}),
+        ])
+        environment = Environment(
+            G,
+            "state_1",
+            action_map={0: "SomeAction"}
+        )
+        environment.reset()
+        # When
+        state, reward, *_ = environment.step(0)
+        # Then
+        self.assertEqual("state_4", state)
+        self.assertEqual(45, reward)
+        
