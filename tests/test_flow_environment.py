@@ -348,6 +348,31 @@ class EnvironmentTests(unittest.TestCase):
         environment.step(0)
         # Then
         self.assertEqual("state_2", environment.state)
+        
+    def test_take_action_returns_truncated_no_action_is_possible(self):
+        # Given
+        G = nx.DiGraph()
+        G.add_nodes_from(["state_1", "state_2"])
+        G.add_edges_from([("state_1", "state_2"), ("state_2", "state_1")])
+        nx.set_edge_attributes(
+            G,
+            {
+                ("state_1", "state_2"): {"action": "action", "weight": 1},
+                ("state_2", "state_1"): {"action": "action", "weight": 1},
+            }
+        )
+        environment = Environment(
+            G,
+            "state_1",
+            action_map={0: "action"}
+        )
+        environment.reset()
+        # When
+        _, _, _, truncated_step_1, _ = environment.step(0)
+        _, _, _, truncated_step_2, _ = environment.step(0)
+        # Then
+        self.assertFalse(truncated_step_1)
+        self.assertTrue(truncated_step_2)
 
     def test_take_action_chooses_improbable_state_if_probable_destination_has_been_visited(self):
         # Given

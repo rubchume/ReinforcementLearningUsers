@@ -19,8 +19,11 @@ class Environment:
             raise ValueError(f"Action code {action_code} does not correspond to any action")
             
         next_state, reward = self.get_next_state(self.G, self.state, action)
-        self.state, reward_automatic = self.move_until_action_is_required(self.G, next_state)
-        return self.state, reward + reward_automatic
+        next_state, reward_automatic = self.move_until_action_is_required(self.G, next_state)
+        truncated = next_state == self.state
+        self.state = next_state
+        
+        return self.state, reward + reward_automatic, False, truncated, None
 
     def state_was_visited(self, state):
         return self._state_was_visited(self.G, state)
@@ -31,6 +34,9 @@ class Environment:
 
     @classmethod
     def move_until_action_is_required(cls, G, start_state):
+        if cls._state_was_visited(G, start_state):
+            return start_state, 0
+        
         total_reward = 0
         next_state = start_state
         current_state = None
