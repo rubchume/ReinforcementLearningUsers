@@ -6,6 +6,7 @@ from gymnasium.spaces import Box, Discrete
 import networkx as nx
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 
 
 class UserFlowEnvironment(Env):
@@ -48,11 +49,11 @@ class UserFlowEnvironment(Env):
         self.history[self.last_action].append(self.initial_state)
         nx.set_node_attributes(self.G, False, "visited")
         nx.set_node_attributes(self.G, [], "taken_actions")
+        nx.set_edge_attributes(self.G, False, "taken")
         self.move_until_action_is_required()
         return self._get_obs(), self._get_info()
 
     def step(self, action_code):
-        # import pdb; pdb.set_trace()
         action = self.action_map.get(action_code, None)
         if not action:
             raise ValueError(f"Action code {action_code} does not correspond to any action")
@@ -127,6 +128,7 @@ class UserFlowEnvironment(Env):
         reward = G.edges[current_state, next_state].get("reward", 0)
         
         cls._mark_action_from_state_as_taken(G, current_state, action)
+        cls._mark_edge_as_taken(G, current_state, next_state, action)
         
         return next_state, reward
     
@@ -142,7 +144,15 @@ class UserFlowEnvironment(Env):
     def _mark_action_from_state_as_taken(G, state, action):
         taken_actions = G.nodes[state]["taken_actions"]
         nx.set_node_attributes(G, {state: {"taken_actions": taken_actions + [action]}})
+    
+    @staticmethod
+    def _mark_edge_as_taken(G, current_state, next_state, action):
+        nx.set_edge_attributes(G, {(current_state, next_state): {"taken": True}})
         
+    @staticmethod
+    def was_edge_taken(G, current_state, next_state):
+        return G.edges[current_state, next_state].get("taken")
+
         
 def draw_network(G):
     def get_node_color(node_data):
@@ -154,6 +164,7 @@ def draw_network(G):
         
         return "indigo"
     
+    plt.figure()
     pos = nx.circular_layout(G)
     node_weight = pd.Series({node: data.get("weight", 1) for node, data in G.nodes(data=True)})
     node_terminal = pd.Series({node: data.get("terminal", False) for node, data in G.nodes(data=True)})
@@ -165,7 +176,8 @@ def draw_network(G):
     )
     nx.draw_networkx_labels(G, pos)
     weights = np.array([np.log10(data["weight"]) for node_a, node_b, data in G.edges(data=True)])
-    is_action_edges = [data.get("action", "Automatic") != "Automatic" for node_a, node_b, data in G.edges(data=True)]
+    # is_action_edges = [data.get("action", "Automatic") != "Automatic" for node_a, node_b, data in G.edges(data=True)]
+    edges_taken = [UserFlowEnvironment.was_edge_taken(G, node_a, node_b) for node_a, node_b in G.edges()]
     edges = nx.draw_networkx_edges(
         G,
         pos,
@@ -173,8 +185,6 @@ def draw_network(G):
         arrowsize=10,
         arrows=True,
         connectionstyle="arc3,rad=0.1",
-        edge_color=["fuchsia" if is_action else "gold" for is_action in is_action_edges],
-        edge_vmin=min(weights),
-        edge_vmax=max(weights),
+        edge_color=["fuchsia" if taken else "gold" for taken in edges_taken],
         width=weights + 1
     )
