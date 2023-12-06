@@ -5,7 +5,7 @@ from gymnasium.spaces import Box, Discrete
 import networkx as nx
 import numpy as np
 
-from src.user_flow_environment import Environment
+from src.user_flow_environment import UserFlowEnvironment as Environment
 
 
 class EnvironmentTests(unittest.TestCase):
@@ -162,28 +162,32 @@ class EnvironmentTests(unittest.TestCase):
     def test_reset_visited_states(self, random_choice_mock):
         # Given
         G = nx.DiGraph()
-        G.add_nodes_from(["state_1", "state_2", "state_3"])
+        G.add_nodes_from(["state_1", "state_2", "state_3", "state_4"])
         G.add_edges_from([
             ("state_1", "state_2"),
             ("state_1", "state_3"),
+            ("state_2", "state_4"),
+            ("state_3", "state_4"),
         ])
         nx.set_edge_attributes(
             G,
             {
                 ("state_1", "state_2"): {"action": "Automatic", "weight": 1},
-                ("state_1", "state_3"): {"action": "Automatic", "weight": 2}
+                ("state_1", "state_3"): {"action": "Automatic", "weight": 2},
+                ("state_2", "state_4"): {"action": "Automatic", "weight": 1},
+                ("state_3", "state_4"): {"action": "Automatic", "weight": 1}
             }
         )
         environment = Environment(G, "state_1")
         
         # Then
-        random_choice_mock.return_value = "state_2"
+        random_choice_mock.side_effect = ["state_2", "state_4"]
         environment.reset()
         self.assertTrue(environment.state_was_visited("state_1"))
         self.assertTrue(environment.state_was_visited("state_2"))
         self.assertFalse(environment.state_was_visited("state_3"))
         
-        random_choice_mock.return_value = "state_3"
+        random_choice_mock.side_effect = ["state_3", "state_4"]
         environment.reset()
         self.assertTrue(environment.state_was_visited("state_1"))
         self.assertTrue(environment.state_was_visited("state_3"))
@@ -212,7 +216,7 @@ class EnvironmentTests(unittest.TestCase):
         environment = Environment(
             G,
             "state_1",
-            action_map={0: "action"}
+            action_map=["action"]
         )
         environment.reset()
         # When
@@ -228,7 +232,7 @@ class EnvironmentTests(unittest.TestCase):
         environment = Environment(
             G,
             "state_1",
-            action_map={0: "action"}
+            action_map=["action"]
         )
         environment.reset()
         # When
@@ -250,7 +254,7 @@ class EnvironmentTests(unittest.TestCase):
         environment = Environment(
             G,
             "state_1",
-            action_map={0: "action"}
+            action_map=["action"]
         )
         environment.reset()
         # When
@@ -273,7 +277,7 @@ class EnvironmentTests(unittest.TestCase):
         environment = Environment(
             G,
             "state_1",
-            action_map={0: "action"}
+            action_map=["action"]
         )
         environment.reset()
         # When
@@ -296,7 +300,7 @@ class EnvironmentTests(unittest.TestCase):
         environment = Environment(
             G,
             "state_1",
-            action_map={0: "action"}
+            action_map=["action"]
         )
         environment.reset()
         # When
@@ -320,7 +324,7 @@ class EnvironmentTests(unittest.TestCase):
         environment = Environment(
             G,
             "state_1",
-            action_map={0: "action"}
+            action_map=["action"]
         )
         environment.reset()
         # When
@@ -343,7 +347,7 @@ class EnvironmentTests(unittest.TestCase):
         environment = Environment(
             G,
             "state_1",
-            action_map={0: "action"}
+            action_map=["action"]
         )
         environment.reset()
         # When
@@ -366,7 +370,7 @@ class EnvironmentTests(unittest.TestCase):
         environment = Environment(
             G,
             "state_1",
-            action_map={0: "action"}
+            action_map=["action"]
         )
         environment.reset()
         # When
@@ -392,7 +396,7 @@ class EnvironmentTests(unittest.TestCase):
         environment = Environment(
             G,
             "state_1",
-            action_map={0: "action"}
+            action_map=["action"]
         )
         environment.reset()
         # When
@@ -414,7 +418,7 @@ class EnvironmentTests(unittest.TestCase):
         environment = Environment(
             G,
             "state_1",
-            action_map={0: "SomeAction"}
+            action_map=["SomeAction"]
         )
         environment.reset()
         # When
@@ -434,7 +438,7 @@ class EnvironmentTests(unittest.TestCase):
         environment = Environment(
             G,
             "state_1",
-            action_map={0: "SomeAction"}
+            action_map=["SomeAction"]
         )
         environment.reset()
         # When
@@ -451,7 +455,7 @@ class EnvironmentTests(unittest.TestCase):
         environment = Environment(
             G,
             "state_1",
-            action_map={0: "SomeAction"}
+            action_map=["SomeAction"]
         )
         # Then
         self.assertEqual(Box(0, 3, shape=(1,), dtype="int"), environment.observation_space)
@@ -464,7 +468,7 @@ class EnvironmentTests(unittest.TestCase):
         environment = Environment(
             G,
             "state_1",
-            action_map={0: "SomeAction", 1: "AnotherAction", 2: "Third Action"}
+            action_map=["SomeAction", "AnotherAction", "Third Action"]
         )
         # Then
         self.assertEqual(Discrete(3), environment.action_space)
@@ -476,18 +480,15 @@ class EnvironmentTests(unittest.TestCase):
         environment = Environment(
             G,
             "state_1",
-            action_map={0: "SomeAction"}
+            action_map=["SomeAction"]
         )
         # When
         observation, info = environment.reset()
         # Then
         self.assertTrue(np.array_equal(np.array(["state_1"]), observation))
         self.assertEqual(
-            {
-                "state": "state_1",
-                "visited_states": ["state_1"]
-            },
-            info
+            {None: ["state_1"]},
+            dict(info)
         )
         
     def test_step_return_observation(self):
@@ -502,7 +503,7 @@ class EnvironmentTests(unittest.TestCase):
         environment = Environment(
             G,
             "state_1",
-            action_map={0: "SomeAction"}
+            action_map=["SomeAction"]
         )
         environment.reset()
         # When
@@ -522,7 +523,7 @@ class EnvironmentTests(unittest.TestCase):
         environment = Environment(
             G,
             "state_1",
-            action_map={0: "SomeAction"}
+            action_map=["SomeAction"]
         )
         environment.reset()
         # When
@@ -544,10 +545,63 @@ class EnvironmentTests(unittest.TestCase):
         environment = Environment(
             G,
             "state_1",
-            action_map={0: "SomeAction"}
+            action_map=["SomeAction"]
         )
         environment.reset()
         # When
         _, _, terminated, *_ = environment.step(0)
         # Then
         self.assertTrue(terminated)
+
+    def test_choose_between_different_actions(self):
+        # Given
+        G = nx.DiGraph()
+        G.add_nodes_from([
+            "state_1", "state_2", "state_3"
+        ])
+        G.add_edges_from([
+            ("state_1", "state_2", {"action": "Action 1", "weight": 1}),
+            ("state_1", "state_3", {"action": "Action 2", "weight": 1}),
+        ])
+        environment = Environment(
+            G,
+            "state_1",
+            action_map=["Action 1", "Action 2"]
+        )
+        
+        # Then
+        environment.reset()
+        environment.step(1)
+        self.assertEqual("state_3", environment.state)
+        
+        # Then
+        environment.reset()
+        environment.step(0)
+        self.assertEqual("state_2", environment.state)
+        
+    def test_return_visited_nodes_in_info(self):
+        # Given
+        G = nx.DiGraph()
+        G.add_nodes_from(["state_1", "state_2", "state_3", "state_4"])
+        G.add_edges_from([
+            ("state_1", "state_2", {"action": "SomeAction", "weight": 1, "reward": 10}),
+            ("state_2", "state_3", {"action": "Automatic", "weight": 1, "reward": 20}),
+            ("state_3", "state_4", {"action": "Automatic", "weight": 1, "reward": 15}),
+        ])
+        environment = Environment(
+            G,
+            "state_1",
+            action_map=["SomeAction"]
+        )
+        environment.reset()
+        # When
+        _, _, _, _, info = environment.step(0)
+        # Then
+        self.assertEqual(
+            dict(info),
+            {
+                None: ["state_1"],
+                "SomeAction": ["state_2", "state_3", "state_4"]
+            }
+        )
+        
