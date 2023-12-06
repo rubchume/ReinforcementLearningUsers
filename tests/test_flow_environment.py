@@ -604,4 +604,154 @@ class EnvironmentTests(unittest.TestCase):
                 "SomeAction": ["state_2", "state_3", "state_4"]
             }
         )
+    
+    def test_move_towards_the_same_step_only_happens_once(self):
+        # Given
+        G = nx.DiGraph()
+        G.add_nodes_from(["state_1", "state_2"])
+        G.add_edges_from([
+            ("state_1", "state_1", {"action": "Automatic", "weight": 1}),
+            ("state_1", "state_2", {"action": "Automatic", "weight": 0}),
+        ])
+        environment = Environment(
+            G,
+            "state_1",
+            action_map=["SomeAction"]
+        )
+        obs, info = environment.reset()
+        # Then
+        self.assertEqual(
+            dict(info),
+            {
+                None: ["state_1", "state_1"],
+            }
+        )
         
+    def test_illegal_action_returns_truncated(self):
+        # Given
+        G = nx.DiGraph()
+        G.add_nodes_from(["state_1", "state_2", "state_3"])
+        G.add_edges_from([
+            ("state_1", "state_1", {"action": "Automatic", "weight": 1}),
+            ("state_1", "state_2", {"action": "Automatic", "weight": 0}),
+            ("state_2", "state_3", {"action": "Action", "weight": 1}),
+        ])
+        environment = Environment(
+            G,
+            "state_1",
+            action_map=["Action"]
+        )
+        environment.reset()
+        # When
+        _, _, _, truncated, info = environment.step(0)
+        # Then
+        self.assertEqual(
+            dict(info),
+            {
+                None: ["state_1", "state_1"],
+            }
+        )
+        self.assertTrue(truncated)
+        
+    def test_reset_action_makes_all_states_not_visited(self):
+        # Given
+        G = nx.DiGraph()
+        G.add_nodes_from(["state_1", "state_2", "state_3", "state_4"])
+        G.add_edges_from([
+            ("state_1", "state_2", {"action": "Action", "weight": 1}),
+            ("state_2", "state_3", {"action": "Automatic", "weight": 1}),
+            ("state_3", "state_4", {"action": "Automatic", "weight": 1}),
+        ])
+        environment = Environment(
+            G,
+            "state_1",
+            action_map=["Action"]
+        )
+        environment.reset()
+        environment.step(0)
+        self.assertEqual("state_4", environment.state)
+        environment.reset()
+        self.assertEqual("state_1", environment.state)
+        environment.step(0)
+        self.assertEqual("state_4", environment.state)
+        
+    def test_reset_makes_new_visited_list(self):
+        # Given
+        G = nx.DiGraph()
+        G.add_nodes_from(["state_1", "state_2", "state_3", "state_4"])
+        G.add_edges_from([
+            ("state_1", "state_2", {"action": "Action", "weight": 1}),
+            ("state_2", "state_3", {"action": "Automatic", "weight": 1}),
+            ("state_3", "state_4", {"action": "Automatic", "weight": 1}),
+        ])
+        environment = Environment(
+            G,
+            "state_1",
+            action_map=["Action"]
+        )
+        environment.reset()
+        environment.step(0)
+        # When
+        _, info = environment.reset()
+        # Then
+        self.assertEqual(dict(info), {None: ["state_1"]})
+        
+    def test_arriving_to_a_terminal_state_stops_at_that_state(self):
+        # Given
+        G = nx.DiGraph()
+        G.add_nodes_from(["state_1", "state_2", ("state_3", {"terminal": True}), "state_4"])
+        G.add_edges_from([
+            ("state_1", "state_2", {"action": "Action", "weight": 1}),
+            ("state_2", "state_3", {"action": "Automatic", "weight": 1}),
+            ("state_3", "state_4", {"action": "Automatic", "weight": 1}),
+        ])
+        environment = Environment(
+            G,
+            "state_1",
+            action_map=["Action"]
+        )
+        environment.reset()
+        # When
+        state, _, terminated, *_ = environment.step(0)
+        # Then
+        self.assertEqual(state, "state_3")
+        self.assertTrue(terminated)
+        
+    def test_arriving_to_a_terminal_state_stops_at_that_state_even_if_no_action_was_taken(self):
+        # Given
+        G = nx.DiGraph()
+        G.add_nodes_from(["state_1", "state_2", ("state_3", {"terminal": True}), "state_4"])
+        G.add_edges_from([
+            ("state_1", "state_2", {"action": "Automatic", "weight": 1}),
+            ("state_2", "state_3", {"action": "Automatic", "weight": 1}),
+            ("state_3", "state_4", {"action": "Automatic", "weight": 1}),
+        ])
+        environment = Environment(
+            G,
+            "state_1",
+            action_map=["Action"]
+        )
+        environment.reset()
+        # Then
+        self.assertEqual(environment.state, "state_3")
+        
+    @mock.patch.object(Environment, "random_choice", side_effect=["state_2", "state_2", "state_3"])
+    def test_do_not_trigger_automatic_action_if_state_stopped_at_itself_and_illegal_action_was_taken(self, _):
+        # Given
+        G = nx.DiGraph()
+        G.add_nodes_from(["state_1", "state_2", "state_3"])
+        G.add_edges_from([
+            ("state_1", "state_2", {"action": "Automatic", "weight": 1}),
+            ("state_2", "state_2", {"action": "Automatic", "weight": 1}),
+            ("state_2", "state_3", {"action": "Automatic", "weight": 1}),
+        ])
+        environment = Environment(
+            G,
+            "state_1",
+            action_map=["Action"]
+        )
+        # When
+        environment.reset()
+        environment.step(0)
+        # Then
+        self.assertEqual(environment.state, "state_2")

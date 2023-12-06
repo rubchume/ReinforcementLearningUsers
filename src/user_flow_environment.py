@@ -43,12 +43,16 @@ class UserFlowEnvironment(Env):
 
     def reset(self):
         self._state = self.initial_state
+        self.history = defaultdict(list)
+        self.last_action = None
         self.history[self.last_action].append(self.initial_state)
         nx.set_node_attributes(self.G, False, "visited")
+        nx.set_node_attributes(self.G, [], "taken_actions")
         self.move_until_action_is_required()
         return self._get_obs(), self._get_info()
 
     def step(self, action_code):
+        # import pdb; pdb.set_trace()
         action = self.action_map.get(action_code, None)
         if not action:
             raise ValueError(f"Action code {action_code} does not correspond to any action")
@@ -59,12 +63,19 @@ class UserFlowEnvironment(Env):
         reward = self.move_to_next_state(action)
         reward_automatic = self.move_until_action_is_required()
         truncated = original_state == self.state
-        terminal = self.G.nodes[self.state].get("terminal")
+        terminal = self.state_is_terminal(self.state)
         
         return self._get_obs(), reward + reward_automatic, terminal, truncated, self._get_info()
 
     def state_was_visited(self, state):
         return self._state_was_visited(self.G, state)
+    
+    def state_is_terminal(self, state):
+        return self._state_is_terminal(self.G, state)
+    
+    @staticmethod
+    def _state_is_terminal(G, state):
+        return G.nodes[state].get("terminal")
     
     def render(self):
         return draw_network(self.G)
@@ -72,11 +83,12 @@ class UserFlowEnvironment(Env):
     @staticmethod
     def _state_was_visited(G, state):
         return G.nodes[state].get("visited", False)
+    
+    @staticmethod
+    def _action_from_state_was_taken(G, state, action):
+        return action in G.nodes[state]["taken_actions"]
 
     def move_until_action_is_required(self):
-        if self._state_was_visited(self.G, self.state):
-            return 0
-        
         total_reward = 0
         previous_state = None
         while previous_state != self.state:
@@ -88,12 +100,18 @@ class UserFlowEnvironment(Env):
     
     def move_to_next_state(self, action):
         next_state, reward = self.get_next_state(self.G, self.state, action)
-        if next_state:
+        if next_state: #and next_state != self.state:
             self.state = next_state
         return reward
 
     @classmethod
     def get_next_state(cls, G, current_state, action):
+        if cls._state_is_terminal(G, current_state):
+            return None, 0
+        
+        if cls._action_from_state_was_taken(G, current_state, action):
+            return None, 0
+        
         action_edges = [
             (destination, attributes.get("weight"))
             for origin, destination, attributes in G.edges(current_state, data=True)
@@ -108,6 +126,8 @@ class UserFlowEnvironment(Env):
         next_state = cls.random_choice(nodes, weights)
         reward = G.edges[current_state, next_state].get("reward", 0)
         
+        cls._mark_action_from_state_as_taken(G, current_state, action)
+        
         return next_state, reward
     
     @staticmethod
@@ -117,16 +137,30 @@ class UserFlowEnvironment(Env):
     @staticmethod
     def mark_state_as_visited(G, state):
         nx.set_node_attributes(G, {state: {"visited": True}})
+    
+    @staticmethod
+    def _mark_action_from_state_as_taken(G, state, action):
+        taken_actions = G.nodes[state]["taken_actions"]
+        nx.set_node_attributes(G, {state: {"taken_actions": taken_actions + [action]}})
         
         
 def draw_network(G):
+    def get_node_color(node_data):
+        if node_data.get("terminal", False):
+            return "aqua"
+        
+        if node_data.get("visited", False):
+            return "red"
+        
+        return "indigo"
+    
     pos = nx.circular_layout(G)
     node_weight = pd.Series({node: data.get("weight", 1) for node, data in G.nodes(data=True)})
     node_terminal = pd.Series({node: data.get("terminal", False) for node, data in G.nodes(data=True)})
     nodes = nx.draw_networkx_nodes(
         G,
         pos,
-        node_color=["aqua" if terminal else "indigo" for terminal in node_terminal],
+        node_color=[get_node_color(data) for _, data in G.nodes(data=True)],
         node_size=4 * node_weight ** 0.5
     )
     nx.draw_networkx_labels(G, pos)
