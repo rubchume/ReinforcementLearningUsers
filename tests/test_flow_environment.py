@@ -1,7 +1,9 @@
 import unittest
 from unittest import mock
 
+from gymnasium.spaces import Box, Discrete
 import networkx as nx
+import numpy as np
 
 from src.user_flow_environment import Environment
 
@@ -441,3 +443,111 @@ class EnvironmentTests(unittest.TestCase):
         self.assertEqual("state_4", state)
         self.assertEqual(45, reward)
         
+    def test_observation_space_is_one_integer_with_a_range_equal_to_the_number_of_nodes(self):
+        # Given
+        G = nx.DiGraph()
+        G.add_nodes_from(["state_1", "state_2", "state_3", "state_4"])
+        # When
+        environment = Environment(
+            G,
+            "state_1",
+            action_map={0: "SomeAction"}
+        )
+        # Then
+        self.assertEqual(Box(0, 3, shape=(1,), dtype="int"), environment.observation_space)
+        
+    def test_action_space_is_integer_with_a_range_equal_to_the_number_of_actions(self):
+        # Given
+        G = nx.DiGraph()
+        G.add_nodes_from(["state_1", "state_2", "state_3", "state_4"])
+        # When
+        environment = Environment(
+            G,
+            "state_1",
+            action_map={0: "SomeAction", 1: "AnotherAction", 2: "Third Action"}
+        )
+        # Then
+        self.assertEqual(Discrete(3), environment.action_space)
+        
+    def test_reset_method_returns_observations_and_info(self):
+        # Given
+        G = nx.DiGraph()
+        G.add_nodes_from(["state_1", "state_2", "state_3", "state_4"])
+        environment = Environment(
+            G,
+            "state_1",
+            action_map={0: "SomeAction"}
+        )
+        # When
+        observation, info = environment.reset()
+        # Then
+        self.assertTrue(np.array_equal(np.array(["state_1"]), observation))
+        self.assertEqual(
+            {
+                "state": "state_1",
+                "visited_states": ["state_1"]
+            },
+            info
+        )
+        
+    def test_step_return_observation(self):
+        # Given
+        G = nx.DiGraph()
+        G.add_nodes_from(["state_1", "state_2", "state_3", "state_4"])
+        G.add_edges_from([
+            ("state_1", "state_2", {"action": "SomeAction", "weight": 1, "reward": 10}),
+            ("state_2", "state_3", {"action": "Automatic", "weight": 1, "reward": 20}),
+            ("state_3", "state_4", {"action": "Automatic", "weight": 1, "reward": 15}),
+        ])
+        environment = Environment(
+            G,
+            "state_1",
+            action_map={0: "SomeAction"}
+        )
+        environment.reset()
+        # When
+        observation, *_ = environment.step(0)
+        # Then
+        self.assertTrue(np.array_equal(np.array(["state_4"]), observation))
+        
+    def test_step_return_terminated_false_if_not_final_state(self):
+        # Given
+        G = nx.DiGraph()
+        G.add_nodes_from(["state_1", "state_2", "state_3", "state_4"])
+        G.add_edges_from([
+            ("state_1", "state_2", {"action": "SomeAction", "weight": 1, "reward": 10}),
+            ("state_2", "state_3", {"action": "Automatic", "weight": 1, "reward": 20}),
+            ("state_3", "state_4", {"action": "Automatic", "weight": 1, "reward": 15}),
+        ])
+        environment = Environment(
+            G,
+            "state_1",
+            action_map={0: "SomeAction"}
+        )
+        environment.reset()
+        # When
+        _, _, terminated, *_ = environment.step(0)
+        # Then
+        self.assertFalse(terminated)
+        
+    def test_step_returns_terminated_true_if_final_state_reached(self):
+        # Given
+        G = nx.DiGraph()
+        G.add_nodes_from([
+            "state_1", "state_2", "state_3", ("state_4", dict(terminal=True))
+        ])
+        G.add_edges_from([
+            ("state_1", "state_2", {"action": "SomeAction", "weight": 1, "reward": 10}),
+            ("state_2", "state_3", {"action": "Automatic", "weight": 1, "reward": 20}),
+            ("state_3", "state_4", {"action": "Automatic", "weight": 1, "reward": 15}),
+        ])
+        environment = Environment(
+            G,
+            "state_1",
+            action_map={0: "SomeAction"}
+        )
+        environment.reset()
+        # When
+        _, _, terminated, *_ = environment.step(0)
+        # Then
+        self.assertTrue(terminated)
