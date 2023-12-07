@@ -444,7 +444,7 @@ class EnvironmentTests(unittest.TestCase):
         # When
         state, reward, *_ = environment.step(0)
         # Then
-        self.assertEqual("state_4", state)
+        self.assertEqual(3, state)
         self.assertEqual(45, reward)
         
     def test_observation_space_is_one_integer_with_a_range_equal_to_the_number_of_nodes(self):
@@ -485,7 +485,7 @@ class EnvironmentTests(unittest.TestCase):
         # When
         observation, info = environment.reset()
         # Then
-        self.assertTrue(np.array_equal(np.array(["state_1"]), observation))
+        self.assertTrue(np.array_equal(np.array([0]), observation))
         self.assertEqual(
             {None: ["state_1"]},
             dict(info)
@@ -509,7 +509,7 @@ class EnvironmentTests(unittest.TestCase):
         # When
         observation, *_ = environment.step(0)
         # Then
-        self.assertTrue(np.array_equal(np.array(["state_4"]), observation))
+        self.assertTrue(np.array_equal(np.array([3]), observation))
         
     def test_step_return_terminated_false_if_not_final_state(self):
         # Given
@@ -714,7 +714,7 @@ class EnvironmentTests(unittest.TestCase):
         # When
         state, _, terminated, *_ = environment.step(0)
         # Then
-        self.assertEqual(state, "state_3")
+        self.assertEqual(state, 2)
         self.assertTrue(terminated)
         
     def test_arriving_to_a_terminal_state_stops_at_that_state_even_if_no_action_was_taken(self):
@@ -755,3 +755,20 @@ class EnvironmentTests(unittest.TestCase):
         environment.step(0)
         # Then
         self.assertEqual(environment.state, "state_2")
+        
+    def test_get_observations_as_gymnasium_space(self):
+        # Given
+        G = nx.DiGraph()
+        G.add_nodes_from(["state_1", "state_2", "state_3"])
+        G.add_edges_from([
+            ("state_1", "state_2", {"action": "Automatic", "weight": 1}),
+            ("state_2", "state_2", {"action": "Automatic", "weight": 1}),
+        ])
+        environment = Environment(
+            G,
+            "state_1",
+        )
+        # When
+        obs, info = environment.reset()
+        # Then
+        self.assertEqual(np.array([1]), obs)

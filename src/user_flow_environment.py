@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 
 
 class UserFlowEnvironment(Env):
-    def __init__(self, G, initial_state, action_map=None):
+    def __init__(self, G, initial_state, action_map=None, render_mode="human"):
         self.G = G
         self.initial_state = initial_state
         self.action_map = {i: action for i, action in enumerate(action_map)} if action_map else {}
@@ -21,6 +21,7 @@ class UserFlowEnvironment(Env):
         self.last_action = None
         self.history = defaultdict(list)
         self._state = initial_state
+        self.render_mode = render_mode
         
     @property
     def states(self):
@@ -37,12 +38,14 @@ class UserFlowEnvironment(Env):
         self.history[self.last_action].append(new_state)
     
     def _get_obs(self):
-        return np.array([self.state])
+        state_index = list(self.G.nodes).index(self.state)
+        return np.array([state_index])
 
     def _get_info(self):
         return self.history
 
-    def reset(self):
+    def reset(self, seed=None):
+        super().reset(seed=seed)
         self._state = self.initial_state
         self.history = defaultdict(list)
         self.last_action = None
@@ -54,7 +57,7 @@ class UserFlowEnvironment(Env):
         return self._get_obs(), self._get_info()
 
     def step(self, action_code):
-        action = self.action_map.get(action_code, None)
+        action = self.action_map.get(int(action_code), None)
         if not action:
             raise ValueError(f"Action code {action_code} does not correspond to any action")
         
