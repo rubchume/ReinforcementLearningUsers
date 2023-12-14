@@ -10,10 +10,13 @@ import matplotlib.pyplot as plt
 
 
 class UserFlowEnvironment(Env):
-    def __init__(self, G, initial_state, action_map=None, render_mode="human"):
+    def __init__(self, G, initial_state, action_map=None, additional_state=None, conditional_probability_matrix=None, render_mode="human"):
         self.G = G
         self.initial_state = initial_state
         self.action_map = {i: action for i, action in enumerate(action_map)} if action_map else {}
+        self.conditional_probability_matrix = conditional_probability_matrix
+        
+        self.additional_state = additional_state
         
         self.action_space = Discrete(num_actions) if (num_actions := len(self.action_map)) > 0 else None
         self.observation_space = Box(0, G.number_of_nodes() - 1, shape=(1,), dtype="int")
@@ -103,13 +106,13 @@ class UserFlowEnvironment(Env):
         return total_reward
     
     def move_to_next_state(self, action):
-        next_state, reward = self.get_next_state(self.G, self.state, action)
+        next_state, reward = self.get_next_state(self.G, self.state, action, self.additional_state, self.conditional_probability_matrix)
         if next_state: #and next_state != self.state:
             self.state = next_state
         return reward
 
     @classmethod
-    def get_next_state(cls, G, current_state, action):
+    def get_next_state(cls, G, current_state, action, additional_state=None, conditional_probability_matrix=None):
         if cls._state_is_terminal(G, current_state):
             return None, 0
         
@@ -126,7 +129,10 @@ class UserFlowEnvironment(Env):
             return None, 0
         
         nodes, weights = zip(*action_edges)
-
+        if additional_state is not None and conditional_probability_matrix is not None:
+            additional_weights = conditional_probability_matrix.loc[nodes, :][additional_state]
+            weights = np.array(weights) * additional_weights
+        
         next_state = cls.random_choice(nodes, weights)
         reward = G.edges[current_state, next_state].get("reward", 0)
         

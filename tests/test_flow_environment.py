@@ -4,6 +4,7 @@ from unittest import mock
 from gymnasium.spaces import Box, Discrete
 import networkx as nx
 import numpy as np
+import pandas as pd
 
 from src.user_flow_environment import UserFlowEnvironment as Environment
 
@@ -772,3 +773,29 @@ class EnvironmentTests(unittest.TestCase):
         obs, info = environment.reset()
         # Then
         self.assertEqual(np.array([1]), obs)
+        
+    def test_use_additional_naive_bayes_matrix(self):
+        # Given
+        G = nx.DiGraph()
+        G.add_nodes_from(["state_1", "state_2", "state_3"])
+        G.add_edges_from([
+            ("state_1", "state_2", {"action": "Automatic", "weight": 1}),
+            ("state_1", "state_3", {"action": "Automatic", "weight": 1000000}),
+        ])
+        conditional_probability_matrix = pd.DataFrame({
+            "state_1": [0.5, 0.5, 0],
+            "state_2": [0.3, 0.3, 0.4],
+            "state_3": [0.3, 0.6, 0],
+        }, index=["value1", "value2", "value3"]).T
+        environment = Environment(
+            G,
+            "state_1",
+            additional_state="value3",
+            conditional_probability_matrix=conditional_probability_matrix
+        )
+        environment.reset()
+        # When
+        obs, info = environment.reset()
+        # Then
+        self.assertEqual(dict(info), {None: ["state_1", "state_2"]})
+        self.assertEqual(obs, 1)
