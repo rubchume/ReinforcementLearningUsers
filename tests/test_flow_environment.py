@@ -356,7 +356,7 @@ class EnvironmentTests(unittest.TestCase):
         # Then
         self.assertEqual("state_2", environment.state)
         
-    def test_take_action_returns_truncated_no_action_is_possible(self):
+    def test_take_action_returns_truncated_if_no_action_is_possible(self):
         # Given
         G = nx.DiGraph()
         G.add_nodes_from(["state_1", "state_2"])
@@ -380,6 +380,34 @@ class EnvironmentTests(unittest.TestCase):
         # Then
         self.assertFalse(truncated_step_1)
         self.assertTrue(truncated_step_2)
+        
+    def test_take_action_does_nothing_if_no_action_is_possible(self):
+        # Given
+        G = nx.DiGraph()
+        G.add_nodes_from(["state_1", "state_2"])
+        G.add_edges_from([("state_1", "state_2"), ("state_2", "state_1")])
+        nx.set_edge_attributes(
+            G,
+            {
+                ("state_1", "state_2"): {"action": "action", "weight": 1},
+                ("state_2", "state_1"): {"action": "action", "weight": 1},
+            }
+        )
+        environment = Environment(
+            G,
+            "state_1",
+            action_map=["action"],
+            truncate_if_transition_not_possible=False,
+        )
+        environment.reset()
+        # When
+        observation_1, _, _, truncated_step_1, _ = environment.step(0)
+        observation_2, _, _, truncated_step_2, _ = environment.step(0)
+        # Then
+        self.assertFalse(truncated_step_1)
+        self.assertFalse(truncated_step_2)
+        self.assertEqual(1, observation_1)
+        self.assertEqual(1, observation_2)
 
     def test_take_action_chooses_improbable_state_if_probable_destination_has_been_visited(self):
         # Given
@@ -488,8 +516,8 @@ class EnvironmentTests(unittest.TestCase):
         # Then
         self.assertTrue(np.array_equal(np.array([0]), observation))
         self.assertEqual(
-            {None: ["state_1"]},
-            dict(info)
+            [(None, ["state_1"])],
+            info
         )
         
     def test_step_return_observation(self):
@@ -599,11 +627,11 @@ class EnvironmentTests(unittest.TestCase):
         _, _, _, _, info = environment.step(0)
         # Then
         self.assertEqual(
-            dict(info),
-            {
-                None: ["state_1"],
-                "SomeAction": ["state_2", "state_3", "state_4"]
-            }
+            info,
+            [
+                (None, ["state_1"]),
+                ("SomeAction", ["state_2", "state_3", "state_4"])
+            ]
         )
     
     def test_move_towards_the_same_step_only_happens_once(self):
@@ -622,10 +650,10 @@ class EnvironmentTests(unittest.TestCase):
         obs, info = environment.reset()
         # Then
         self.assertEqual(
-            dict(info),
-            {
-                None: ["state_1", "state_1"],
-            }
+            info,
+            [
+                (None, ["state_1", "state_1"]),
+            ]
         )
         
     def test_illegal_action_returns_truncated(self):
@@ -647,12 +675,92 @@ class EnvironmentTests(unittest.TestCase):
         _, _, _, truncated, info = environment.step(0)
         # Then
         self.assertEqual(
-            dict(info),
-            {
-                None: ["state_1", "state_1"],
-            }
+            info,
+            [
+                (None, ["state_1", "state_1"]),
+                ("Action", [])
+            ]
         )
         self.assertTrue(truncated)
+        
+    def test_illegal_action_returns_negative_reward_and_truncates(self):
+        # Given
+        G = nx.DiGraph()
+        G.add_nodes_from(["state_1", "state_2", "state_3"])
+        G.add_edges_from([
+            ("state_1", "state_1", {"action": "Automatic", "weight": 1}),
+            ("state_1", "state_2", {"action": "Automatic", "weight": 0}),
+            ("state_2", "state_3", {"action": "Action", "weight": 1}),
+        ])
+        environment = Environment(
+            G,
+            "state_1",
+            action_map=["Action"],
+            truncation_reward=-3
+        )
+        environment.reset()
+        # When
+        _, reward, _, truncated, info = environment.step(0)
+        # Then
+        self.assertEqual(
+            reward,
+            -3
+        )
+        self.assertTrue(truncated)
+        
+    def test_illegal_action_does_nothing(self):
+        # Given
+        G = nx.DiGraph()
+        G.add_nodes_from(["state_1", "state_2", "state_3"])
+        G.add_edges_from([
+            ("state_1", "state_1", {"action": "Automatic", "weight": 1}),
+            ("state_1", "state_2", {"action": "Automatic", "weight": 0}),
+            ("state_2", "state_3", {"action": "Action", "weight": 1}),
+        ])
+        environment = Environment(
+            G,
+            "state_1",
+            action_map=["Action"],
+            truncate_if_transition_not_possible=False
+        )
+        environment.reset()
+        # When
+        _, _, _, truncated, info = environment.step(0)
+        # Then
+        self.assertEqual(
+            info,
+            [
+                (None, ["state_1", "state_1"]),
+                ("Action", []),
+            ]
+        )
+        self.assertFalse(truncated)
+        
+    def test_illegal_action_returns_negative_reward_and_does_not_truncate(self):
+        # Given
+        G = nx.DiGraph()
+        G.add_nodes_from(["state_1", "state_2", "state_3"])
+        G.add_edges_from([
+            ("state_1", "state_1", {"action": "Automatic", "weight": 1}),
+            ("state_1", "state_2", {"action": "Automatic", "weight": 0}),
+            ("state_2", "state_3", {"action": "Action", "weight": 1}),
+        ])
+        environment = Environment(
+            G,
+            "state_1",
+            action_map=["Action"],
+            truncate_if_transition_not_possible=False,
+            truncation_reward=-3
+        )
+        environment.reset()
+        # When
+        _, reward, _, truncated, info = environment.step(0)
+        # Then
+        self.assertEqual(
+            reward,
+            -3
+        )
+        self.assertFalse(truncated)
         
     def test_reset_action_makes_all_states_not_visited(self):
         # Given
@@ -695,7 +803,7 @@ class EnvironmentTests(unittest.TestCase):
         # When
         _, info = environment.reset()
         # Then
-        self.assertEqual(dict(info), {None: ["state_1"]})
+        self.assertEqual(info, [(None, ["state_1"])])
         
     def test_arriving_to_a_terminal_state_stops_at_that_state(self):
         # Given
@@ -770,7 +878,7 @@ class EnvironmentTests(unittest.TestCase):
             "state_1",
         )
         # When
-        obs, info = environment.reset()
+        obs, _ = environment.reset()
         # Then
         self.assertEqual(np.array([1]), obs)
         
@@ -797,5 +905,5 @@ class EnvironmentTests(unittest.TestCase):
         # When
         obs, info = environment.reset()
         # Then
-        self.assertEqual(dict(info), {None: ["state_1", "state_2"]})
+        self.assertEqual(info, [(None, ["state_1", "state_2"])])
         self.assertEqual(obs, 1)

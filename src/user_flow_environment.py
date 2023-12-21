@@ -1,4 +1,4 @@
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 import random
 
 from gymnasium import Env
@@ -10,13 +10,26 @@ import matplotlib.pyplot as plt
 
 
 class UserFlowEnvironment(Env):
-    def __init__(self, G, initial_state, action_map=None, additional_state=None, conditional_probability_matrix=None, render_mode="human"):
+    HistoryStep = namedtuple("HistoryStep", ["action", "steps"])
+    
+    def __init__(
+        self,
+        G,
+        initial_state,
+        action_map=None,
+        additional_state=None,
+        conditional_probability_matrix=None,
+        truncate_if_transition_not_possible=True,
+        truncation_reward=0,
+        render_mode="human"
+    ):
         self.G = G
         self.initial_state = initial_state
         self.action_map = {i: action for i, action in enumerate(action_map)} if action_map else {}
         self.conditional_probability_matrix = conditional_probability_matrix
-        
         self.additional_state = additional_state
+        self.truncate_if_transition_not_possible = truncate_if_transition_not_possible
+        self.truncation_reward = truncation_reward
         
         self.action_space = Discrete(num_actions) if (num_actions := len(self.action_map)) > 0 else None
         self.observation_space = Box(0, G.number_of_nodes() - 1, shape=(1,), dtype="int")
@@ -38,7 +51,13 @@ class UserFlowEnvironment(Env):
     def state(self, new_state):
         self.mark_state_as_visited(self.G, self.state)
         self._state = new_state
-        self.history[self.last_action].append(new_state)
+        self._add_step_to_last_action_history(new_state)
+    
+    def _add_step_to_last_action_history(self, step):
+        self.history[-1].steps.append(step)
+        
+    def _add_action_to_action_history(self, action):
+        self.history.append(self.HistoryStep(action, []))
     
     def _get_obs(self):
         state_index = list(self.G.nodes).index(self.state)
@@ -50,9 +69,9 @@ class UserFlowEnvironment(Env):
     def reset(self, seed=None):
         super().reset(seed=seed)
         self._state = self.initial_state
-        self.history = defaultdict(list)
-        self.last_action = None
-        self.history[self.last_action].append(self.initial_state)
+        self.history = []
+        self._add_action_to_action_history(None)
+        self._add_step_to_last_action_history(self.initial_state)
         nx.set_node_attributes(self.G, False, "visited")
         nx.set_node_attributes(self.G, [], "taken_actions")
         nx.set_edge_attributes(self.G, False, "taken")
@@ -64,12 +83,16 @@ class UserFlowEnvironment(Env):
         if not action:
             raise ValueError(f"Action code {action_code} does not correspond to any action")
         
-        self.last_action = action
-        
+        self._add_action_to_action_history(action)
+        # import pdb; pdb.set_trace()
         original_state = self.state
         reward = self.move_to_next_state(action)
         reward_automatic = self.move_until_action_is_required()
-        truncated = original_state == self.state
+        if original_state == self.state:
+            reward += self.truncation_reward
+            truncated = self.truncate_if_transition_not_possible
+        else:
+            truncated = False
         terminal = self.state_is_terminal(self.state)
         
         return self._get_obs(), reward + reward_automatic, terminal, truncated, self._get_info()
@@ -107,7 +130,7 @@ class UserFlowEnvironment(Env):
     
     def move_to_next_state(self, action):
         next_state, reward = self.get_next_state(self.G, self.state, action, self.additional_state, self.conditional_probability_matrix)
-        if next_state: #and next_state != self.state:
+        if next_state:
             self.state = next_state
         return reward
 
