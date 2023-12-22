@@ -516,7 +516,7 @@ class EnvironmentTests(unittest.TestCase):
         # Then
         self.assertTrue(np.array_equal(np.array([0]), observation))
         self.assertEqual(
-            [(None, ["state_1"])],
+            {"history": [(None, ["state_1"])]},
             info
         )
         
@@ -628,10 +628,10 @@ class EnvironmentTests(unittest.TestCase):
         # Then
         self.assertEqual(
             info,
-            [
+            {"history": [
                 (None, ["state_1"]),
                 ("SomeAction", ["state_2", "state_3", "state_4"])
-            ]
+            ]}
         )
     
     def test_move_towards_the_same_step_only_happens_once(self):
@@ -651,9 +651,9 @@ class EnvironmentTests(unittest.TestCase):
         # Then
         self.assertEqual(
             info,
-            [
+            {"history": [
                 (None, ["state_1", "state_1"]),
-            ]
+            ]}
         )
         
     def test_illegal_action_returns_truncated(self):
@@ -676,10 +676,10 @@ class EnvironmentTests(unittest.TestCase):
         # Then
         self.assertEqual(
             info,
-            [
+            {"history": [
                 (None, ["state_1", "state_1"]),
                 ("Action", [])
-            ]
+            ]}
         )
         self.assertTrue(truncated)
         
@@ -729,10 +729,10 @@ class EnvironmentTests(unittest.TestCase):
         # Then
         self.assertEqual(
             info,
-            [
+            {"history": [
                 (None, ["state_1", "state_1"]),
                 ("Action", []),
-            ]
+            ]}
         )
         self.assertFalse(truncated)
         
@@ -803,7 +803,7 @@ class EnvironmentTests(unittest.TestCase):
         # When
         _, info = environment.reset()
         # Then
-        self.assertEqual(info, [(None, ["state_1"])])
+        self.assertEqual(info, {"history": [(None, ["state_1"])]})
         
     def test_arriving_to_a_terminal_state_stops_at_that_state(self):
         # Given
@@ -905,5 +905,5 @@ class EnvironmentTests(unittest.TestCase):
         # When
         obs, info = environment.reset()
         # Then
-        self.assertEqual(info, [(None, ["state_1", "state_2"])])
+        self.assertEqual(info, {"history": [(None, ["state_1", "state_2"])]})
         self.assertEqual(obs, 1)

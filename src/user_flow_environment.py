@@ -64,7 +64,7 @@ class UserFlowEnvironment(Env):
         return np.array([state_index])
 
     def _get_info(self):
-        return self.history
+        return {"history": self.history}
 
     def reset(self, seed=None):
         super().reset(seed=seed)
