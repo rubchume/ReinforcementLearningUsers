@@ -2,7 +2,7 @@ from collections import defaultdict, namedtuple
 import random
 
 from gymnasium import Env
-from gymnasium.spaces import Box, Discrete
+from gymnasium.spaces import Box, Dict, Discrete
 import networkx as nx
 import numpy as np
 import pandas as pd
@@ -31,8 +31,20 @@ class UserFlowEnvironment(Env):
         self.truncate_if_transition_not_possible = truncate_if_transition_not_possible
         self.truncation_reward = truncation_reward
         
-        self.action_space = Discrete(num_actions) if (num_actions := len(self.action_map)) > 0 else None
-        self.observation_space = Box(0, G.number_of_nodes() - 1, shape=(1,), dtype="int")
+        self.action_space = Discrete(num_actions) if (num_actions := len(self.action_map)) > 0 else Discrete(1)
+        
+        num_additional_state_values = (
+            conditional_probability_matrix.shape[1]
+            if conditional_probability_matrix is not None else
+            1
+        )
+        
+        self.observation_space = Dict((
+            {
+                "step": Box(0, G.number_of_nodes() - 1, shape=(1,), dtype="int"),
+                "additional_state": Discrete(num_additional_state_values)
+            }
+        ))
         
         self.last_action = None
         self.history = defaultdict(list)
@@ -61,7 +73,12 @@ class UserFlowEnvironment(Env):
     
     def _get_obs(self):
         state_index = list(self.G.nodes).index(self.state)
-        return np.array([state_index])
+        additional_state_index = (
+            0 
+            if self.additional_state is None or self.conditional_probability_matrix is None else 
+            self.conditional_probability_matrix.columns.get_loc(self.additional_state)
+        )
+        return {"step": np.array([state_index]), "additional_state": additional_state_index}
 
     def _get_info(self):
         return {"history": self.history}
@@ -105,7 +122,7 @@ class UserFlowEnvironment(Env):
     
     @staticmethod
     def _state_is_terminal(G, state):
-        return G.nodes[state].get("terminal")
+        return G.nodes[state].get("terminal", False)
     
     def render(self):
         return draw_network(self.G)

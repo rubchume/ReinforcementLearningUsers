@@ -5,6 +5,7 @@ from gymnasium.spaces import Box, Discrete
 import networkx as nx
 import numpy as np
 import pandas as pd
+from stable_baselines3.common.env_checker import check_env
 
 from src.user_flow_environment import UserFlowEnvironment as Environment
 
@@ -406,8 +407,8 @@ class EnvironmentTests(unittest.TestCase):
         # Then
         self.assertFalse(truncated_step_1)
         self.assertFalse(truncated_step_2)
-        self.assertEqual(1, observation_1)
-        self.assertEqual(1, observation_2)
+        self.assertEqual(1, observation_1["step"])
+        self.assertEqual(1, observation_2["step"])
 
     def test_take_action_chooses_improbable_state_if_probable_destination_has_been_visited(self):
         # Given
@@ -473,10 +474,10 @@ class EnvironmentTests(unittest.TestCase):
         # When
         state, reward, *_ = environment.step(0)
         # Then
-        self.assertEqual(3, state)
+        self.assertEqual(3, state["step"])
         self.assertEqual(45, reward)
         
-    def test_observation_space_is_one_integer_with_a_range_equal_to_the_number_of_nodes(self):
+    def test_observation_space_first_element_is_one_integer_with_a_range_equal_to_the_number_of_nodes(self):
         # Given
         G = nx.DiGraph()
         G.add_nodes_from(["state_1", "state_2", "state_3", "state_4"])
@@ -487,7 +488,7 @@ class EnvironmentTests(unittest.TestCase):
             action_map=["SomeAction"]
         )
         # Then
-        self.assertEqual(Box(0, 3, shape=(1,), dtype="int"), environment.observation_space)
+        self.assertEqual(Box(0, 3, shape=(1,), dtype="int"), environment.observation_space["step"])
         
     def test_action_space_is_integer_with_a_range_equal_to_the_number_of_actions(self):
         # Given
@@ -514,7 +515,7 @@ class EnvironmentTests(unittest.TestCase):
         # When
         observation, info = environment.reset()
         # Then
-        self.assertTrue(np.array_equal(np.array([0]), observation))
+        self.assertEqual(0, observation["step"])
         self.assertEqual(
             {"history": [(None, ["state_1"])]},
             info
@@ -538,7 +539,7 @@ class EnvironmentTests(unittest.TestCase):
         # When
         observation, *_ = environment.step(0)
         # Then
-        self.assertTrue(np.array_equal(np.array([3]), observation))
+        self.assertEqual(3, observation["step"])
         
     def test_step_return_terminated_false_if_not_final_state(self):
         # Given
@@ -823,7 +824,7 @@ class EnvironmentTests(unittest.TestCase):
         # When
         state, _, terminated, *_ = environment.step(0)
         # Then
-        self.assertEqual(state, 2)
+        self.assertEqual(state["step"], 2)
         self.assertTrue(terminated)
         
     def test_arriving_to_a_terminal_state_stops_at_that_state_even_if_no_action_was_taken(self):
@@ -880,7 +881,7 @@ class EnvironmentTests(unittest.TestCase):
         # When
         obs, _ = environment.reset()
         # Then
-        self.assertEqual(np.array([1]), obs)
+        self.assertEqual(1, obs["step"])
         
     def test_use_additional_naive_bayes_matrix(self):
         # Given
@@ -906,4 +907,34 @@ class EnvironmentTests(unittest.TestCase):
         obs, info = environment.reset()
         # Then
         self.assertEqual(info, {"history": [(None, ["state_1", "state_2"])]})
-        self.assertEqual(obs, 1)
+        self.assertEqual(obs["step"], 1)
+        
+    def test_update_additional_state_with_callback(self):
+        # Given
+        G = nx.DiGraph()
+        G.add_nodes_from(["accumulative_state_1", "accumulative_state_2", "accumulative_state_3"])
+        G.add_edges_from([
+            ("accumulative_state_1", "accumulative_state_2", {"action": "Automatic", "weight": 1}),
+            ("accumulative_state_2", "accumulative_state_3", {"action": "Automatic", "weight": 1}),
+        ])
+        environment = Environment(
+            G,
+            "accumulative_state_1",
+            # update_additional_state_callback=update_additional_state_callback
+        )
+        environment.reset()
+        # When
+        obs, info = environment.reset()
+        # Then
+        self.assertEqual(info, {"history": [(None, ["accumulative_state_1", "accumulative_state_2", "accumulative_state_3"])]})
+        self.assertEqual(obs["step"], 2)
+        self.assertEqual(obs["additional_state"], 3)
+
+    def test_environment_should_pass_native_check(self):
+        # Given
+        G = nx.DiGraph()
+        G.add_nodes_from(["state"])
+        environment = Environment(G, "state", action_map=["Action"])
+        # When
+        check_env(environment, warn=True)
+        
