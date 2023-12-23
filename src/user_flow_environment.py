@@ -64,6 +64,10 @@ class UserFlowEnvironment(Env):
         self.mark_state_as_visited(self.G, self.state)
         self._state = new_state
         self._add_step_to_last_action_history(new_state)
+        self.update_additional_state_callback()
+        
+    def update_additional_state_callback(self):
+        pass
     
     def _add_step_to_last_action_history(self, step):
         self.history[-1].steps.append(step)

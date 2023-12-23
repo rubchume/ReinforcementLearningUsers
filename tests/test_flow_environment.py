@@ -911,16 +911,27 @@ class EnvironmentTests(unittest.TestCase):
         
     def test_update_additional_state_with_callback(self):
         # Given
+        class EnvironmentWithCallback(Environment):
+            def update_additional_state_callback(self):
+                if (current_step := int(self.state.split("_")[-1])) > int(self.additional_state.split("_")[-1]):
+                    self.additional_state = f"current_step_{current_step}"
+            
+        
         G = nx.DiGraph()
         G.add_nodes_from(["accumulative_state_1", "accumulative_state_2", "accumulative_state_3"])
         G.add_edges_from([
             ("accumulative_state_1", "accumulative_state_2", {"action": "Automatic", "weight": 1}),
             ("accumulative_state_2", "accumulative_state_3", {"action": "Automatic", "weight": 1}),
         ])
-        environment = Environment(
+        environment = EnvironmentWithCallback(
             G,
             "accumulative_state_1",
-            # update_additional_state_callback=update_additional_state_callback
+            additional_state="current_step_0",
+            conditional_probability_matrix=pd.DataFrame(
+                np.ones((3, 4)),
+                index=["accumulative_state_1", "accumulative_state_2", "accumulative_state_3"],
+                columns=["current_step_0", "current_step_1", "current_step_2", "current_step_3"]
+            )
         )
         environment.reset()
         # When
