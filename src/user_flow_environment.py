@@ -27,6 +27,7 @@ class UserFlowEnvironment(Env):
         self.initial_state = initial_state
         self.action_map = {i: action for i, action in enumerate(action_map)} if action_map else {}
         self.conditional_probability_matrix = conditional_probability_matrix
+        self.initial_additional_state = additional_state
         self.additional_state = additional_state
         self.truncate_if_transition_not_possible = truncate_if_transition_not_possible
         self.truncation_reward = truncation_reward
@@ -90,6 +91,7 @@ class UserFlowEnvironment(Env):
     def reset(self, seed=None):
         super().reset(seed=seed)
         self._state = self.initial_state
+        self.additional_state = self.initial_additional_state
         self.history = []
         self._add_action_to_action_history(None)
         self._add_step_to_last_action_history(self.initial_state)
@@ -172,10 +174,15 @@ class UserFlowEnvironment(Env):
         if len(action_edges) == 0:
             return None, 0
         
-        nodes, weights = zip(*action_edges)
+        nodes, transition_weights = zip(*action_edges)
         if additional_state is not None and conditional_probability_matrix is not None:
             additional_weights = conditional_probability_matrix.loc[nodes, :][additional_state]
-            weights = np.array(weights) * additional_weights
+            weights = np.array(transition_weights) * additional_weights
+        else:
+            weights = transition_weights
+        
+        if all(weight == 0 for weight in weights):
+            return None, 0
         
         next_state = cls.random_choice(nodes, weights)
         reward = G.edges[current_state, next_state].get("reward", 0)

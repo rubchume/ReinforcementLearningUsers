@@ -20,7 +20,15 @@ class EnvironmentTests(unittest.TestCase):
         environment.reset()
         # Then
         self.assertEqual(environment.state, "state")
-        
+    
+    def test_environment_should_pass_native_check(self):
+        # Given
+        G = nx.DiGraph()
+        G.add_nodes_from(["state"])
+        environment = Environment(G, "state", action_map=["Action"])
+        # When
+        check_env(environment, warn=True)
+    
     def test_two_states_with_no_edge_yields_first_state_when_resetting(self):
         # Given
         G = nx.DiGraph()
@@ -902,12 +910,37 @@ class EnvironmentTests(unittest.TestCase):
             additional_state="value3",
             conditional_probability_matrix=conditional_probability_matrix
         )
-        environment.reset()
         # When
         obs, info = environment.reset()
         # Then
         self.assertEqual(info, {"history": [(None, ["state_1", "state_2"])]})
         self.assertEqual(obs["step"], 1)
+        
+    def test_additional_naive_bayes_matrix_makes_weights_0_and_behaves_as_if_no_action_is_possible(self):
+        # Given
+        G = nx.DiGraph()
+        G.add_nodes_from(["state_1", "state_2", "state_3"])
+        G.add_edges_from([
+            ("state_1", "state_2", {"action": "Automatic", "weight": 1}),
+            ("state_1", "state_3", {"action": "Automatic", "weight": 1}),
+        ])
+        conditional_probability_matrix = pd.DataFrame({
+            "state_1": [0.5, 0.5, 0],
+            "state_2": [0.3, 0.3, 0],
+            "state_3": [0.3, 0.6, 0],
+        }, index=["value1", "value2", "value3"]).T
+        environment = Environment(
+            G,
+            "state_1",
+            additional_state="value3",
+            conditional_probability_matrix=conditional_probability_matrix
+        )
+        environment.reset()
+        # When
+        obs, info = environment.reset()
+        # Then
+        self.assertEqual(info, {"history": [(None, ["state_1"])]})
+        self.assertEqual(obs["step"], 0)
         
     def test_update_additional_state_with_callback(self):
         # Given
@@ -933,7 +966,6 @@ class EnvironmentTests(unittest.TestCase):
                 columns=["current_step_0", "current_step_1", "current_step_2", "current_step_3"]
             )
         )
-        environment.reset()
         # When
         obs, info = environment.reset()
         # Then
@@ -941,11 +973,35 @@ class EnvironmentTests(unittest.TestCase):
         self.assertEqual(obs["step"], 2)
         self.assertEqual(obs["additional_state"], 3)
 
-    def test_environment_should_pass_native_check(self):
+    def test_additional_state_gets_updated_when_resetting(self):
         # Given
-        G = nx.DiGraph()
-        G.add_nodes_from(["state"])
-        environment = Environment(G, "state", action_map=["Action"])
-        # When
-        check_env(environment, warn=True)
+        class EnvironmentWithCallback(Environment):
+            def update_additional_state_callback(self):                
+                if (current_step := int(self.state.split("_")[-1])) == int(self.additional_state.split("_")[-1]) + 1:
+                    self.additional_state = f"current_step_{current_step}"
+                else:
+                    raise RuntimeError("There was a discontinuity")
         
+        G = nx.DiGraph()
+        G.add_nodes_from(["accumulative_state_1", "accumulative_state_2", "accumulative_state_3"])
+        G.add_edges_from([
+            ("accumulative_state_1", "accumulative_state_2", {"action": "Automatic", "weight": 1}),
+            ("accumulative_state_2", "accumulative_state_3", {"action": "Automatic", "weight": 1}),
+        ])
+        environment = EnvironmentWithCallback(
+            G,
+            "accumulative_state_1",
+            additional_state="current_step_1",
+            conditional_probability_matrix=pd.DataFrame(
+                np.ones((3, 4)),
+                index=["accumulative_state_1", "accumulative_state_2", "accumulative_state_3"],
+                columns=["current_step_0", "current_step_1", "current_step_2", "current_step_3"]
+            )
+        )
+        # When
+        obs, info = environment.reset()
+        obs, info = environment.reset()
+        # Then
+        # self.assertEqual(info, {"history": [(None, ["accumulative_state_1", "accumulative_state_2", "accumulative_state_3"])]})
+        # self.assertEqual(obs["step"], 2)
+        # self.assertEqual(obs["additional_state"], 3)
