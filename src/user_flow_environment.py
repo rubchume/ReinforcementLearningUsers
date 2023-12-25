@@ -2,7 +2,7 @@ from collections import defaultdict, namedtuple
 import random
 
 from gymnasium import Env
-from gymnasium.spaces import Box, Dict, Discrete
+from gymnasium.spaces import Box, Dict, Discrete, Tuple
 import networkx as nx
 import numpy as np
 import pandas as pd
@@ -17,8 +17,8 @@ class UserFlowEnvironment(Env):
         G,
         initial_state,
         action_map=None,
-        additional_state=None,
-        conditional_probability_matrix=None,
+        additional_states=None,
+        conditional_probability_matrices=None,
         truncate_if_transition_not_possible=True,
         truncation_reward=0,
         render_mode="human"
@@ -26,26 +26,26 @@ class UserFlowEnvironment(Env):
         self.G = G
         self.initial_state = initial_state
         self.action_map = {i: action for i, action in enumerate(action_map)} if action_map else {}
-        self.conditional_probability_matrix = conditional_probability_matrix
-        self.initial_additional_state = additional_state
-        self.additional_state = additional_state
+        self.conditional_probability_matrices = conditional_probability_matrices or {}
+        self.initial_additional_states = additional_states or {}
+        self.additional_states = self.initial_additional_states.copy()
         self.truncate_if_transition_not_possible = truncate_if_transition_not_possible
         self.truncation_reward = truncation_reward
         
         self.action_space = Discrete(num_actions) if (num_actions := len(self.action_map)) > 0 else Discrete(1)
         
-        num_additional_state_values = (
-            conditional_probability_matrix.shape[1]
-            if conditional_probability_matrix is not None else
-            1
-        )
+        num_additional_states_values = {
+            state_name: conditional_probability_matrix.shape[1]
+            for state_name, conditional_probability_matrix in self.conditional_probability_matrices.items()
+        }
         
-        self.observation_space = Dict((
-            {
-                "step": Box(0, G.number_of_nodes() - 1, shape=(1,), dtype="int"),
-                "additional_state": Discrete(num_additional_state_values)
+        self.observation_space = Dict({
+            "step": Box(0, G.number_of_nodes() - 1, shape=(1,), dtype="int"),
+            **{
+                state_name: Discrete(conditional_probability_matrix.shape[1])
+                for state_name, conditional_probability_matrix in self.conditional_probability_matrices.items()
             }
-        ))
+        })
         
         self.last_action = None
         self.history = defaultdict(list)
@@ -78,12 +78,11 @@ class UserFlowEnvironment(Env):
     
     def _get_obs(self):
         state_index = list(self.G.nodes).index(self.state)
-        additional_state_index = (
-            0 
-            if self.additional_state is None or self.conditional_probability_matrix is None else 
-            self.conditional_probability_matrix.columns.get_loc(self.additional_state)
-        )
-        return {"step": np.array([state_index]), "additional_state": additional_state_index}
+        additional_state_indices = {
+            state_name: self.conditional_probability_matrices[state_name].columns.get_loc(self.additional_states[state_name])
+            for state_name in self.conditional_probability_matrices.keys()
+        }
+        return {"step": np.array([state_index]), **additional_state_indices}
 
     def _get_info(self):
         return {"history": self.history}
@@ -91,7 +90,7 @@ class UserFlowEnvironment(Env):
     def reset(self, seed=None):
         super().reset(seed=seed)
         self._state = self.initial_state
-        self.additional_state = self.initial_additional_state
+        self.additional_states = self.initial_additional_states.copy()
         self.history = []
         self._add_action_to_action_history(None)
         self._add_step_to_last_action_history(self.initial_state)
@@ -152,13 +151,13 @@ class UserFlowEnvironment(Env):
         return total_reward
     
     def move_to_next_state(self, action):
-        next_state, reward = self.get_next_state(self.G, self.state, action, self.additional_state, self.conditional_probability_matrix)
+        next_state, reward = self.get_next_state(self.G, self.state, action, self.additional_states, self.conditional_probability_matrices)
         if next_state:
             self.state = next_state
         return reward
 
     @classmethod
-    def get_next_state(cls, G, current_state, action, additional_state=None, conditional_probability_matrix=None):
+    def get_next_state(cls, G, current_state, action, additional_states, conditional_probability_matrices):
         if cls._state_is_terminal(G, current_state):
             return None, 0
         
@@ -175,12 +174,12 @@ class UserFlowEnvironment(Env):
             return None, 0
         
         nodes, transition_weights = zip(*action_edges)
-        if additional_state is not None and conditional_probability_matrix is not None:
-            additional_weights = conditional_probability_matrix.loc[nodes, :][additional_state]
-            weights = np.array(transition_weights) * additional_weights
-        else:
-            weights = transition_weights
+        weights = transition_weights
         
+        for state_name in additional_states.keys():
+            additional_weights = conditional_probability_matrices[state_name].loc[nodes, :][additional_states[state_name]]
+            weights *= additional_weights
+
         if all(weight == 0 for weight in weights):
             return None, 0
         

@@ -907,8 +907,8 @@ class EnvironmentTests(unittest.TestCase):
         environment = Environment(
             G,
             "state_1",
-            additional_state="value3",
-            conditional_probability_matrix=conditional_probability_matrix
+            additional_states={"additional": "value3"},
+            conditional_probability_matrices={"additional": conditional_probability_matrix}
         )
         # When
         obs, info = environment.reset()
@@ -932,8 +932,8 @@ class EnvironmentTests(unittest.TestCase):
         environment = Environment(
             G,
             "state_1",
-            additional_state="value3",
-            conditional_probability_matrix=conditional_probability_matrix
+            additional_states={"additional_state": "value3"},
+            conditional_probability_matrices={"additional_state": conditional_probability_matrix}
         )
         environment.reset()
         # When
@@ -946,8 +946,8 @@ class EnvironmentTests(unittest.TestCase):
         # Given
         class EnvironmentWithCallback(Environment):
             def update_additional_state_callback(self):
-                if (current_step := int(self.state.split("_")[-1])) > int(self.additional_state.split("_")[-1]):
-                    self.additional_state = f"current_step_{current_step}"
+                if (current_step := int(self.state.split("_")[-1])) > int(self.additional_states["additional_state"].split("_")[-1]):
+                    self.additional_states["additional_state"] = f"current_step_{current_step}"
             
         
         G = nx.DiGraph()
@@ -959,12 +959,12 @@ class EnvironmentTests(unittest.TestCase):
         environment = EnvironmentWithCallback(
             G,
             "accumulative_state_1",
-            additional_state="current_step_0",
-            conditional_probability_matrix=pd.DataFrame(
+            additional_states={"additional_state": "current_step_0"},
+            conditional_probability_matrices={"additional_state": pd.DataFrame(
                 np.ones((3, 4)),
                 index=["accumulative_state_1", "accumulative_state_2", "accumulative_state_3"],
                 columns=["current_step_0", "current_step_1", "current_step_2", "current_step_3"]
-            )
+            )}
         )
         # When
         obs, info = environment.reset()
@@ -976,9 +976,9 @@ class EnvironmentTests(unittest.TestCase):
     def test_additional_state_gets_updated_when_resetting(self):
         # Given
         class EnvironmentWithCallback(Environment):
-            def update_additional_state_callback(self):                
-                if (current_step := int(self.state.split("_")[-1])) == int(self.additional_state.split("_")[-1]) + 1:
-                    self.additional_state = f"current_step_{current_step}"
+            def update_additional_state_callback(self):
+                if (current_step := int(self.state.split("_")[-1])) == int(self.additional_states["additional_state"].split("_")[-1]) + 1:
+                    self.additional_states["additional_state"] = f"current_step_{current_step}"
                 else:
                     raise RuntimeError("There was a discontinuity")
         
@@ -991,17 +991,50 @@ class EnvironmentTests(unittest.TestCase):
         environment = EnvironmentWithCallback(
             G,
             "accumulative_state_1",
-            additional_state="current_step_1",
-            conditional_probability_matrix=pd.DataFrame(
+            additional_states={"additional_state": "current_step_1"},
+            conditional_probability_matrices={"additional_state": pd.DataFrame(
                 np.ones((3, 4)),
                 index=["accumulative_state_1", "accumulative_state_2", "accumulative_state_3"],
                 columns=["current_step_0", "current_step_1", "current_step_2", "current_step_3"]
-            )
+            )}
         )
         # When
         obs, info = environment.reset()
         obs, info = environment.reset()
+        
+    def test_use_multiple_additional_states_with_naive_bayes_matrices(self):
+        # Given
+        G = nx.DiGraph()
+        G.add_nodes_from(["state_1", "state_2", "state_3", "state_4"])
+        G.add_edges_from([
+            ("state_1", "state_2", {"action": "Automatic", "weight": 1}),
+            ("state_1", "state_3", {"action": "Automatic", "weight": 1000000}),
+            ("state_1", "state_4", {"action": "Automatic", "weight": 1}),
+        ])
+        conditional_probability_matrix_1 = pd.DataFrame({
+            "state_1": [0.5, 0.5, 0],
+            "state_2": [0.3, 0.6, 0],
+            "state_3": [0.3, 0.3, 0.4],
+            "state_4": [0.3, 0.3, 0.4],
+        }, index=["A", "B", "C"]).T
+        conditional_probability_matrix_2 = pd.DataFrame({
+            "state_1": [0.5, 0.5, 0],
+            "state_2": [0.3, 0.4, 0.3],
+            "state_3": [0.3, 0, 0.6],
+            "state_4": [0.3, 0.4, 0.3],
+        }, index=["D", "E", "F"]).T
+        environment = Environment(
+            G,
+            "state_1",
+            additional_states={"additional_state_1": "C", "additional_state_2": "E"},
+            conditional_probability_matrices={
+                "additional_state_1": conditional_probability_matrix_1,
+                "additional_state_2": conditional_probability_matrix_2
+            }
+        )
+        # When
+        obs, info = environment.reset()
         # Then
-        # self.assertEqual(info, {"history": [(None, ["accumulative_state_1", "accumulative_state_2", "accumulative_state_3"])]})
-        # self.assertEqual(obs["step"], 2)
-        # self.assertEqual(obs["additional_state"], 3)
+        self.assertEqual(info, {"history": [(None, ["state_1", "state_4"])]})
+        self.assertEqual(obs["step"], 3)
+        
