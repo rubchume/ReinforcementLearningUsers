@@ -1037,4 +1037,31 @@ class EnvironmentTests(unittest.TestCase):
         # Then
         self.assertEqual(info, {"history": [(None, ["state_1", "state_4"])]})
         self.assertEqual(obs["step"], 3)
+
+    def test_random_inititalization_of_additional_state(self):
+        # Given
+        G = nx.DiGraph()
+        G.add_nodes_from(["state_1", "state_2", "state_3"])
+        G.add_edges_from([
+            ("state_1", "state_2", {"action": "Automatic", "weight": 1}),
+            ("state_1", "state_3", {"action": "Automatic", "weight": 1000000}),
+        ])
+        conditional_probability_matrix = pd.DataFrame({
+            "state_1": [0.5, 0.5, 0],
+            "state_2": [0.3, 0.3, 0.4],
+            "state_3": [0.3, 0.6, 0],
+        }, index=["value1", "value2", "value3"]).T
         
+        generate_state = mock.MagicMock(return_value="value3")
+        
+        environment = Environment(
+            G,
+            "state_1",
+            additional_states={"additional": generate_state},
+            conditional_probability_matrices={"additional": conditional_probability_matrix}
+        )
+        # When
+        obs, info = environment.reset()
+        # Then
+        self.assertEqual(info, {"history": [(None, ["state_1", "state_2"])]})
+        self.assertEqual(obs["step"], 1)

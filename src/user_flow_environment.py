@@ -1,5 +1,6 @@
 from collections import defaultdict, namedtuple
 import random
+from typing import Callable, Dict
 
 from gymnasium import Env
 from gymnasium.spaces import Box, Dict, Discrete, Tuple
@@ -28,7 +29,6 @@ class UserFlowEnvironment(Env):
         self.action_map = {i: action for i, action in enumerate(action_map)} if action_map else {}
         self.conditional_probability_matrices = conditional_probability_matrices or {}
         self.initial_additional_states = additional_states or {}
-        self.additional_states = self.initial_additional_states.copy()
         self.truncate_if_transition_not_possible = truncate_if_transition_not_possible
         self.truncation_reward = truncation_reward
         
@@ -75,6 +75,13 @@ class UserFlowEnvironment(Env):
         
     def _add_action_to_action_history(self, action):
         self.history.append(self.HistoryStep(action, []))
+
+    @staticmethod
+    def _create_additional_states(additional_states_info: Dict):
+        return {
+            state_name: value if not isinstance(value, Callable) else value()
+            for state_name, value in additional_states_info.items()
+        }
     
     def _get_obs(self):
         state_index = list(self.G.nodes).index(self.state)
@@ -90,7 +97,7 @@ class UserFlowEnvironment(Env):
     def reset(self, seed=None):
         super().reset(seed=seed)
         self._state = self.initial_state
-        self.additional_states = self.initial_additional_states.copy()
+        self.additional_states = self._create_additional_states(self.initial_additional_states)
         self.history = []
         self._add_action_to_action_history(None)
         self._add_step_to_last_action_history(self.initial_state)
