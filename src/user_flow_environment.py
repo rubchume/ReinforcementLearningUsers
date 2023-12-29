@@ -171,32 +171,49 @@ class UserFlowEnvironment(Env):
         if cls._action_from_state_was_taken(G, current_state, action):
             return None, 0
         
-        action_edges = [
-            (destination, attributes.get("weight"))
-            for origin, destination, attributes in G.edges(current_state, data=True)
-            if attributes.get("action") == action and not cls._state_was_visited(G, destination)
-        ]
-
-        if len(action_edges) == 0:
+        next_state = cls.compute_next_state(G, current_state, action, additional_states, conditional_probability_matrices)
+        if next_state is None:
             return None, 0
         
-        nodes, transition_weights = zip(*action_edges)
-        weights = transition_weights
-        
-        for state_name in additional_states.keys():
-            additional_weights = conditional_probability_matrices[state_name].loc[nodes, :][additional_states[state_name]]
-            weights *= additional_weights
-
-        if all(weight == 0 for weight in weights):
-            return None, 0
-        
-        next_state = cls.random_choice(nodes, weights)
         reward = G.edges[current_state, next_state].get("reward", 0)
         
         cls._mark_action_from_state_as_taken(G, current_state, action)
         cls._mark_edge_as_taken(G, current_state, next_state, action)
         
         return next_state, reward
+    
+    @classmethod
+    def compute_next_state(cls, G, current_state, action, additional_states, conditional_probability_matrices):
+        action_edges = [
+            (destination, attributes.get("weight"))
+            for _, destination, attributes in G.edges(current_state, data=True)
+            if attributes.get("action") == action and not cls._state_was_visited(G, destination)
+        ]
+
+        if len(action_edges) == 0:
+            return None
+        
+        nodes, transition_weights = zip(*action_edges)
+        weights = transition_weights
+        
+        if current_state in nodes:
+            current_state_index = nodes.index(current_state)
+            self_referencing_probability = weights[current_state_index]
+            self_reference = cls.random_choice([current_state, "others"], [self_referencing_probability, 1 - self_referencing_probability]) == current_state
+            if self_reference:
+                return current_state
+            else:
+                nodes.remove(current_state)
+                weights.pop(current_state_index)
+        
+        for state_name in additional_states.keys():
+            additional_weights = conditional_probability_matrices[state_name].loc[nodes, :][additional_states[state_name]]
+            weights *= additional_weights
+
+        if all(weight == 0 for weight in weights):
+            return None
+        
+        return cls.random_choice(nodes, weights)
     
     @staticmethod
     def random_choice(options, weights):

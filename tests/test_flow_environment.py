@@ -1065,3 +1065,27 @@ class EnvironmentTests(unittest.TestCase):
         # Then
         self.assertEqual(info, {"history": [(None, ["state_1", "state_2"])]})
         self.assertEqual(obs["step"], 1)
+        
+    def test_self_referencing_probability_should_not_be_influenced_by_additional_states(self):
+        # Given
+        G = nx.DiGraph()
+        G.add_nodes_from(["state_1", "state_2"])
+        G.add_edges_from([
+            ("state_1", "state_1", {"action": "Automatic", "weight": 1}),
+            ("state_1", "state_2", {"action": "Automatic", "weight": 1}),
+        ])
+        conditional_probability_matrix = pd.DataFrame({
+            "state_1": [0.5, 0.5, 0],
+            "state_2": [0.3, 0.3, 0.4],
+        }, index=["value1", "value2", "value3"]).T
+        environment = Environment(
+            G,
+            "state_1",
+            additional_states={"additional": "value3"},
+            conditional_probability_matrices={"additional": conditional_probability_matrix}
+        )
+        # When
+        obs, info = environment.reset()
+        # Then
+        self.assertEqual(info, {"history": [(None, ["state_1", "state_1"])]})
+        self.assertEqual(obs["step"], 0)
