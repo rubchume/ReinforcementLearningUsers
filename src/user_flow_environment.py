@@ -194,12 +194,15 @@ class UserFlowEnvironment(Env):
             return None
         
         nodes, transition_weights = zip(*action_edges)
-        weights = transition_weights
+        nodes = list(nodes)
+        weights = list(transition_weights)
         
         if current_state in nodes:
+            # import pdb; pdb.set_trace()
             current_state_index = nodes.index(current_state)
-            self_referencing_probability = weights[current_state_index]
-            self_reference = cls.random_choice([current_state, "others"], [self_referencing_probability, 1 - self_referencing_probability]) == current_state
+            self_referencing_weight = weights[current_state_index]
+            rest_weights = sum(weights) - self_referencing_weight
+            self_reference = cls.random_choice([current_state, "others"], [self_referencing_weight, rest_weights]) == current_state
             if self_reference:
                 return current_state
             else:

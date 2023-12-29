@@ -141,8 +141,8 @@ class EnvironmentTests(unittest.TestCase):
         self.assertEqual(environment.state, "state_3")
         
         random_choice_mock.assert_has_calls([
-            mock.call(("state_2", "state_3"), (1, 2)),
-            mock.call(("state_2", "state_3"), (1, 2))
+            mock.call(["state_2", "state_3"], [1, 2]),
+            mock.call(["state_2", "state_3"], [1, 2])
         ])
         
     def test_do_not_yield_a_state_that_was_already_visited(self):
@@ -1065,14 +1065,16 @@ class EnvironmentTests(unittest.TestCase):
         # Then
         self.assertEqual(info, {"history": [(None, ["state_1", "state_2"])]})
         self.assertEqual(obs["step"], 1)
-        
-    def test_self_referencing_probability_should_not_be_influenced_by_additional_states(self):
+    
+    @mock.patch.object(Environment, "random_choice")
+    def test_self_referencing_probability_should_not_be_influenced_by_additional_states(self, random_choice_mock):
         # Given
         G = nx.DiGraph()
-        G.add_nodes_from(["state_1", "state_2"])
+        G.add_nodes_from(["state_1", "state_2", "state_3"])
         G.add_edges_from([
-            ("state_1", "state_1", {"action": "Automatic", "weight": 1}),
+            ("state_1", "state_1", {"action": "Automatic", "weight": 3}),
             ("state_1", "state_2", {"action": "Automatic", "weight": 1}),
+            ("state_1", "state_3", {"action": "Automatic", "weight": 4}),
         ])
         conditional_probability_matrix = pd.DataFrame({
             "state_1": [0.5, 0.5, 0],
@@ -1084,8 +1086,10 @@ class EnvironmentTests(unittest.TestCase):
             additional_states={"additional": "value3"},
             conditional_probability_matrices={"additional": conditional_probability_matrix}
         )
+        random_choice_mock.return_value = "state_1"
         # When
         obs, info = environment.reset()
         # Then
         self.assertEqual(info, {"history": [(None, ["state_1", "state_1"])]})
         self.assertEqual(obs["step"], 0)
+        random_choice_mock.assert_called_once_with(["state_1", "others"], [3, 5])
