@@ -198,7 +198,6 @@ class UserFlowEnvironment(Env):
         weights = list(transition_weights)
         
         if current_state in nodes:
-            # import pdb; pdb.set_trace()
             current_state_index = nodes.index(current_state)
             self_referencing_weight = weights[current_state_index]
             rest_weights = sum(weights) - self_referencing_weight
