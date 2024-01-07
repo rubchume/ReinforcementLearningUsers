@@ -1,4 +1,4 @@
 .ipynb_checkpoints
 .python-version
-data
+notebooks/data
 __pycache__
