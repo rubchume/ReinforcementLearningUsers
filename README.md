@@ -34,6 +34,8 @@ Therefore, it is that model we must implement. The chosen model was a Markov pro
 With the interpretation in hand and the environment implemented, the only thing left is the choice of a model and the training. The model was Proximal Policy Optimization algorithm implemented by `stable-baselines3` Python package.
 
 For the evaluation, we used numerical analysis but also graph visualizations for a more explainable behavior.
+![UserFlow](https://github.com/rubchume/ReinforcementLearningUsers/assets/83817841/470c5bcd-68d5-4230-8f5b-8ec65c087073)
+
 
 # Conclusions
 
