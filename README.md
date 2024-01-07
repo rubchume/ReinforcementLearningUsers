@@ -2,9 +2,19 @@
 
 This project uses reinforcement learning for finding the best actions a digital company can take during user marketing funnel in order to get the maximum amount of users subscribed.
 
+The process is all contained in [Exploratory Data Analysis](notebooks/Exploratory%20Data%20Analysis.ipynb).
+
+Before opening the notebook, execute
+```bash
+source setup.sh
+```
+to create a Conda Python virtual environment and install the required Python packages.
+
+If you are not on a Linux based Operating System (like Windows), you will need to setup the environment manually. Make use of the `pyproject.toml` file and Poetry tool for a convenient and easy way of handling the process.
+
 # Data description
 
-The data comes from a real digital company and it is property anonymized.
+The [data](data/SalesCRM%20-%20CRM.csv) comes from a real digital company and it is property anonymized.
 
 There is information about 11032 users in a tabular format. For each of them, there is information about the steps he took in the funnel and at what date each change happened. There are also contextual variables: user's location, education level, whether he did or didn't get the call, etc.
 
